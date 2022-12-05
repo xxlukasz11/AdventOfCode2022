@@ -32,12 +32,9 @@ void parseStackRow(std::vector<Stack>& stacks, const std::string& line) {
 }
 
 Move parseMove(std::string line) {
-	auto movePos = line.find("move");
-	line.replace(movePos, 4, "");
-	auto fromPos = line.find("from");
-	line.replace(fromPos, 4, "");
-	auto toPos = line.find("to");
-	line.replace(toPos, 2, "");
+	common::replaceFirst(line, "move", "");
+	common::replaceFirst(line, "from", "");
+	common::replaceFirst(line, "to", "");
 	std::istringstream stream(line);
 	Move move;
 	stream >> move.quantity >> move.src >> move.tgt;
