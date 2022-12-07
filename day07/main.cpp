@@ -1,14 +1,8 @@
 #include "../common/pch.h"
-#include <iostream>
-#include <cstdint>
 #include <string>
 #include <algorithm>
-#include <numeric>
-#include <utility>
 #include <sstream>
-#include <vector>
-#include <map>
-#include <set>
+#include <list>
 
 constexpr int COMMAND_POS = 2;
 constexpr int COMMAND_LENGTH = 2;
@@ -23,7 +17,7 @@ enum class EntryType {
 struct Entry;
 
 struct Directory {
-	std::optional<int> size;
+	std::optional<int> cachedSize;
 	std::list<std::weak_ptr<Entry>> entries;
 };
 
@@ -49,14 +43,14 @@ struct Entry {
 		if (type == EntryType::FILE) {
 			return file.size;
 		}
-		if (directory.size.has_value()) {
-			return directory.size.value();
+		if (directory.cachedSize.has_value()) {
+			return directory.cachedSize.value();
 		}
 		int size = 0;
 		for (const auto& entry : directory.entries) {
 			size += entry.lock()->getSize();
 		}
-		directory.size = size;
+		directory.cachedSize = size;
 		return size;
 	}
 
@@ -73,63 +67,101 @@ struct Entry {
 
 using DataType = std::list<std::shared_ptr<Entry>>;
 
-DataType read() {
-	common::FileReader reader("input.txt");
-	DataType data;
-	std::weak_ptr<Entry> currentEntry;
-	std::weak_ptr<Entry> root;
-	for (std::string line; reader.nextLine(line);) {
+class CommandParser {
+public:
+	void parseNextLine(const std::string& line) {
+		this->line = line;
 		if (line.starts_with("$")) {
-			std::string command = line.substr(COMMAND_POS, COMMAND_LENGTH);
-			if (command == "cd") {
-				std::string path = line.substr(COMMAND_ARG_POS);
-				if (currentEntry.expired()) {
-					auto entry = std::make_shared<Entry>(EntryType::DIR, path);
-					currentEntry = entry;
-					data.push_back(entry);
-					root = entry;
-				}
-				else if (path == "..") {
-					currentEntry = currentEntry.lock()->parent;
-				}
-				else if (path == "/") {
-					currentEntry = root;
-				}
-				else {
-					auto entryOpt = currentEntry.lock()->getEntry(path);
-					if (entryOpt.has_value()) {
-						currentEntry = entryOpt.value();
-					}
-					else {
-						auto entry = std::make_shared<Entry>(EntryType::DIR, path);
-						entry->parent = currentEntry;
-						currentEntry.lock()->directory.entries.push_back(entry);
-						currentEntry = entry;
-						data.push_back(entry);
-					}
-				}
-			}
+			parseCommand();
 		}
 		else if (line.starts_with("dir")) {
-			std::string dirName = line.substr(DIR_NAME_POS);
-			auto entry = std::make_shared<Entry>(EntryType::DIR, dirName);
-			entry->parent = currentEntry;
-			currentEntry.lock()->directory.entries.push_back(entry);
-			data.push_back(entry);
+			parseDir();
 		}
 		else {
-			std::istringstream stream(line);
-			int fileSize;
-			std::string fileName;
-			stream >> fileSize >> fileName;
-			auto entry = std::make_shared<Entry>(EntryType::FILE, fileName);
+			parseFile();
+		}
+	}
+
+	const DataType& getAllEntries() const {
+		return data;
+	}
+
+private:
+	void parseCommand() {
+		std::string command = line.substr(COMMAND_POS, COMMAND_LENGTH);
+		if (command != "cd") {
+			return;
+		}
+
+		std::string path = line.substr(COMMAND_ARG_POS);
+		if (currentEntry.expired()) {
+			parseInitialCd(path);
+		}
+		else if (path == "..") {
+			currentEntry = currentEntry.lock()->parent;
+		}
+		else if (path == "/") {
+			currentEntry = root;
+		}
+		else {
+			descendTo(path);
+		}
+	}
+
+	void parseInitialCd(const std::string& path) {
+		auto entry = std::make_shared<Entry>(EntryType::DIR, path);
+		data.push_back(entry);
+		currentEntry = entry;
+		root = entry;
+	}
+
+	void descendTo(const std::string& path) {
+		auto child = currentEntry.lock()->getEntry(path);
+		if (child.has_value()) {
+			currentEntry = child.value();
+		}
+		else {
+			auto entry = std::make_shared<Entry>(EntryType::DIR, path);
 			entry->parent = currentEntry;
-			entry->file.size = fileSize;
 			currentEntry.lock()->directory.entries.push_back(entry);
+			currentEntry = entry;
 			data.push_back(entry);
 		}
 	}
-	return data;
+
+	void parseDir() {
+		std::string dirName = line.substr(DIR_NAME_POS);
+		auto entry = std::make_shared<Entry>(EntryType::DIR, dirName);
+		entry->parent = currentEntry;
+		currentEntry.lock()->directory.entries.push_back(entry);
+		data.push_back(entry);
+	}
+
+	void parseFile() {
+		std::istringstream stream(line);
+		int fileSize;
+		std::string fileName;
+		stream >> fileSize >> fileName;
+		auto entry = std::make_shared<Entry>(EntryType::FILE, fileName);
+		entry->parent = currentEntry;
+		entry->file.size = fileSize;
+		currentEntry.lock()->directory.entries.push_back(entry);
+		data.push_back(entry);
+	}
+
+	std::string line;
+	DataType data;
+	std::weak_ptr<Entry> currentEntry;
+	std::weak_ptr<Entry> root;
+};
+
+DataType read() {
+	common::FileReader reader("input.txt");
+	CommandParser parser;
+	for (std::string line; reader.nextLine(line);) {
+		parser.parseNextLine(line);
+	}
+	return parser.getAllEntries();
 }
 
 int partOne(const DataType& data) {
