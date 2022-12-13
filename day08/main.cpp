@@ -20,43 +20,9 @@ DataType read() {
 	return data;
 }
 
-template<typename Container>
-class MatrixIterator {
-public:
-	using ValueType = typename Container::value_type::value_type;
-
-	MatrixIterator(const Container& matrix, int row, int col, common::Dir dir) : matrix(matrix), row(row), col(col), dir(dir) {}
-
-	bool hasValue() {
-		auto currentValue = common::tryGet(matrix, row, col);
-		return currentValue.has_value();
-	}
-
-	int getCol() const {
-		return col;
-	}
-
-	int getRow() const {
-		return row;
-	}
-
-	ValueType next() {
-		auto currentValue = common::tryGet(matrix, row, col);
-		row += dir.y;
-		col += dir.x;
-		return currentValue.value();
-	}
-
-private:
-	const Container& matrix;
-	int row;
-	int col;
-	common::Dir dir;
-};
-
 std::vector<std::pair<int, int>> getVisibleTrees(const DataType& data, int rowIdx, int colIdx, common::Dir dir) {
 	std::vector<std::pair<int, int>> visibleTrees;
-	MatrixIterator it(data, rowIdx, colIdx, dir);
+	common::MatrixIterator it(data, rowIdx, colIdx, dir);
 	for (int highestTree = -1; it.hasValue();) {
 		auto col = it.getCol();
 		auto row = it.getRow();
@@ -97,7 +63,7 @@ int partOne(const DataType& data) {
 int calculateViewingDistance(const DataType& data, int row, int col, common::Dir dir) {
 	int houseTree = data[row][col];
 	int visibleTrees = 0;
-	MatrixIterator it(data, row, col, dir);
+	common::MatrixIterator it(data, row, col, dir);
 	it.next();
 	while (it.hasValue()) {
 		++visibleTrees;
