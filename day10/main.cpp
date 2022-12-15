@@ -1,14 +1,6 @@
 #include "../common/pch.h"
-#include <iostream>
-#include <cstdint>
 #include <string>
-#include <algorithm>
-#include <numeric>
-#include <utility>
-#include <sstream>
 #include <vector>
-#include <map>
-#include <set>
 
 enum class Instruction {
 	ADDX,
@@ -100,24 +92,18 @@ int partOne(const DataType& data) {
 std::string partTwo(const DataType& data) {
 	constexpr int crtWidth = 40;
 	constexpr int crtHeight = 6;
+	constexpr int totalPixels = crtWidth * crtHeight;
 
-	std::vector<std::vector<char>> crt;
-	crt.reserve(crtWidth * crtHeight);
+	std::vector<std::vector<char>> crt(crtHeight, std::vector<char>(crtWidth, '.'));
 	int pixelsDrawn = 0;
 
 	Engine engine(data);
-	while (pixelsDrawn < crtWidth * crtHeight) {
-		if (crt.size() * crtWidth == pixelsDrawn) {
-			crt.push_back({});
-		}
-
-		auto& row = crt.back();
-		const int pixelPos = row.size();
+	while (pixelsDrawn < totalPixels) {
+		auto& row = crt[pixelsDrawn / crtWidth];
+		const int pixelPos = pixelsDrawn % crtWidth;
 		const int spritePos = engine.getRegisterValue();
 		if (pixelPos >= spritePos - 1 && pixelPos <= spritePos + 1) {
-			row.push_back('#');
-		} else {
-			row.push_back('.');
+			row[pixelPos] = '#';
 		}
 		++pixelsDrawn;
 
@@ -128,7 +114,7 @@ std::string partTwo(const DataType& data) {
 		for (const auto& pixel : row) {
 			std::cout << pixel;
 		}
-		std::cout << std::endl;
+		std::cout << '\n';
 	}
 
 	return "EJCFPGLH";
