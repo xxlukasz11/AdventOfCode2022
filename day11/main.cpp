@@ -150,8 +150,7 @@ DataType read() {
 		int trueId = std::stoi(line.substr(line.find(onkey) + onkey.size()));
 
 		line = reader.nextLine();
-		auto id = line.substr(line.find(onkey) + onkey.size());
-		int falseId = std::stoi(id);
+		int falseId = std::stoi(line.substr(line.find(onkey) + onkey.size()));
 
 		Monkey monkey(monkeyId, inspectFunction, divisor, {trueId, falseId});
 		std::for_each(items.begin(), items.end(), [&monkey](const auto& item) {
