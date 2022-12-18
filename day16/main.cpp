@@ -63,7 +63,7 @@ std::vector<std::string> dijkstra(const DataType& data, const std::string& start
 	DijkstraMap distances;
 	std::set<Node> nodes;
 	nodes.insert(Node{ startId, 0 });
-	distances[startId] = { 0, {} };
+	distances[startId] = { 0, {startId} };
 
 	while (!nodes.empty()) {
 		auto node = *nodes.begin();
@@ -89,7 +89,7 @@ std::vector<std::string> dijkstra(const DataType& data, const std::string& start
 	return distances[endId].second;
 }
 
-using DistancesMap = std::unordered_map<std::string, std::unordered_map<std::string, int>>;
+using DistancesMap = std::unordered_map<std::string, std::unordered_map<std::string, const std::vector<std::string>>>;
 
 class Actor {
 public:
@@ -159,8 +159,9 @@ public:
 			for (int j = i + 1; j < nonZeroValves.size(); ++j) {
 				const auto& src = nonZeroValves[i];
 				const auto& tgt = nonZeroValves[j];
-				auto distance = dijkstra(data, src, tgt).size();
+				auto distance = dijkstra(data, src, tgt);
 				distances[src].insert({ tgt, distance});
+				std::reverse(distance.begin(), distance.end());
 				distances[tgt].insert({ src, distance });
 			}
 		}
@@ -168,7 +169,7 @@ public:
 		const auto start = "AA";
 		for (int i = 0; i < nonZeroValves.size(); ++i) {
 			const auto& tgt = nonZeroValves[i];
-			auto distance = dijkstra(data, start, tgt).size();
+			auto distance = dijkstra(data, start, tgt);
 			distances[start].insert({ tgt, distance });
 		}
 	}
@@ -218,7 +219,8 @@ public:
 
 		bool hasContinuation = false;
 		for (const auto& targetId : possibleTargets) {
-			auto distance = distancesFromCurrent[targetId];
+			auto path = distancesFromCurrent[targetId];
+			auto distance = path.size() - 1;
 			auto timeLeftAfterArrival = minutesLeft - distance;
 			auto timeLeftAfterOpening = timeLeftAfterArrival - 1;
 			if (timeLeftAfterOpening >= 0) {
@@ -231,6 +233,30 @@ public:
 			addNewScore(currentScore);
 			return;
 		}
+	}
+
+	std::vector<Actor> createNewActors(const Actor& actor, int timePassed, const std::unordered_set<std::string>& notOpenedValves) {
+		std::vector<Actor> newActors;
+		if (!actor.isReady()) {
+			return newActors;
+		}
+
+		auto& distancesFromActor = distances[actor.getCurrentValveId()];
+		for (const auto& targetId : notOpenedValves) {
+			auto path = distancesFromActor[targetId];
+			auto distance = path.size() - 1;
+			auto timeOfArrival = timePassed + distance;
+			auto timeOfOpening = timeOfArrival + 1;
+			bool pathContainsUnopenedValves = std::any_of(std::next(path.begin()), std::prev(path.end()), [&notOpenedValves](auto&& id) {
+				return notOpenedValves.contains(id);
+			});
+			if (timeOfOpening <= totalTime && !pathContainsUnopenedValves) {
+				Actor newActor = actor;
+				newActor.movingTo(targetId, timeOfArrival);
+				newActors.push_back(newActor);
+			}
+		}
+		return newActors;
 	}
 
 	void nextMinuteWithElephant(int currentScore, int timePassed, std::unordered_set<std::string> notOpenedValves, Actor me, Actor elephant) {
@@ -267,35 +293,8 @@ public:
 			return;
 		}
 
-		std::vector<Actor> newElephants;
-		if (elephant.isReady()) {
-			auto& distancesFromElephant = distances[elephantValve.id];
-			for (const auto& targetId : notOpenedValves) {
-				auto distance = distancesFromElephant[targetId];
-				auto timeOfArrival = timePassed + distance;
-				auto timeOfOpening = timeOfArrival + 1;
-				if (timeOfOpening <= totalTime) {
-					Actor newElephant = elephant;
-					newElephant.movingTo(targetId, timeOfArrival);
-					newElephants.push_back(newElephant);
-				}
-			}
-		}
-
-		std::vector<Actor> newMes;
-		if (me.isReady()) {
-			auto& distancesFromMe = distances[myValve.id];
-			for (const auto& targetId : notOpenedValves) {
-				auto distance = distancesFromMe[targetId];
-				auto timeOfArrival = timePassed + distance;
-				auto timeOfOpening = timeOfArrival + 1;
-				if (timeOfOpening <= totalTime) {
-					Actor newMe = me;
-					newMe.movingTo(targetId, timeOfArrival);
-					newMes.push_back(newMe);
-				}
-			}
-		}
+		std::vector<Actor> newElephants = createNewActors(elephant, timePassed, notOpenedValves);
+		std::vector<Actor> newMes = createNewActors(me, timePassed, notOpenedValves);
 
 		if (newMes.empty()) {
 			newMes.push_back(me);
