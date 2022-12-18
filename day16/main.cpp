@@ -47,21 +47,23 @@ bool operator<(const Node& n1, const Node& n2) {
 	return n1.distance < n2.distance;
 }
 
-int getExistingValueOrMax(std::map<std::string, int>& map, const std::string& key) {
+using DijkstraMap = std::map<std::string, std::pair<int, std::vector<std::string>>>;
+
+int getExistingValueOrMax(DijkstraMap& map, const std::string& key) {
 	auto found = map.find(key);
 	if (found == map.end()) {
-		auto max = std::numeric_limits<int>::max();;
-		map[key] = max;
+		auto max = 100000;
+		map[key] = { max, {} };
 		return max;
 	}
-	return found->second;
+	return found->second.first;
 }
 
-int dijkstra(const DataType& data, const std::string& startId, const std::string& endId) {
-	auto distances = std::map<std::string, int>();
+std::vector<std::string> dijkstra(const DataType& data, const std::string& startId, const std::string& endId) {
+	DijkstraMap distances;
 	std::set<Node> nodes;
-	nodes.insert(Node{startId, 0 });
-	distances[startId] = 0;
+	nodes.insert(Node{ startId, 0 });
+	distances[startId] = { 0, {} };
 
 	while (!nodes.empty()) {
 		auto node = *nodes.begin();
@@ -72,17 +74,19 @@ int dijkstra(const DataType& data, const std::string& startId, const std::string
 			int neighborDistance = getExistingValueOrMax(distances, neighbor);
 			int newNeighborDistance = nodeDistance + 1;
 			if (neighborDistance > newNeighborDistance) {
+				auto path = distances[node.id].second;
+				path.push_back(neighbor);
 				auto found = nodes.find(Node{ neighbor, neighborDistance });
 				if (found != nodes.end()) {
 					nodes.erase(found);
 				}
 				nodes.insert(Node{ neighbor, newNeighborDistance });
-				distances[neighbor] = newNeighborDistance;
+				distances[neighbor] = { newNeighborDistance, path };
 			}
 		}
 	}
 
-	return distances[endId];
+	return distances[endId].second;
 }
 
 using DistancesMap = std::unordered_map<std::string, std::unordered_map<std::string, int>>;
@@ -155,7 +159,7 @@ public:
 			for (int j = i + 1; j < nonZeroValves.size(); ++j) {
 				const auto& src = nonZeroValves[i];
 				const auto& tgt = nonZeroValves[j];
-				auto distance = dijkstra(data, src, tgt);
+				auto distance = dijkstra(data, src, tgt).size();
 				distances[src].insert({ tgt, distance});
 				distances[tgt].insert({ src, distance });
 			}
@@ -164,7 +168,7 @@ public:
 		const auto start = "AA";
 		for (int i = 0; i < nonZeroValves.size(); ++i) {
 			const auto& tgt = nonZeroValves[i];
-			auto distance = dijkstra(data, start, tgt);
+			auto distance = dijkstra(data, start, tgt).size();
 			distances[start].insert({ tgt, distance });
 		}
 	}
