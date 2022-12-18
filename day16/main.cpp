@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <unordered_set>
 
 struct Valve {
 	std::string id;
@@ -16,7 +17,7 @@ struct Valve {
 	std::vector<std::string> neighborIds;
 };
 
-using DataType = std::map<std::string, Valve>;
+using DataType = std::unordered_map<std::string, Valve>;
 
 DataType read() {
 	common::FileReader reader("input.txt");
@@ -84,7 +85,7 @@ int dijkstra(const DataType& data, const std::string& startId, const std::string
 	return distances[endId];
 }
 
-using DistancesMap = std::map<std::string, std::map<std::string, int>>;
+using DistancesMap = std::unordered_map<std::string, std::unordered_map<std::string, int>>;
 
 class Actor {
 public:
@@ -185,7 +186,7 @@ public:
 		const auto initialValveId = "AA";
 		Actor me(initialValveId);
 		Actor elephant(initialValveId);
-		std::set<std::string> notOpenedValves(nonZeroValves.begin(), nonZeroValves.end());
+		std::unordered_set<std::string> notOpenedValves(nonZeroValves.begin(), nonZeroValves.end());
 		nextMinuteWithElephant(0, 0, notOpenedValves, me, elephant);
 	}
 
@@ -228,7 +229,7 @@ public:
 		}
 	}
 
-	void nextMinuteWithElephant(int currentScore, int timePassed, std::set<std::string> notOpenedValves, Actor me, Actor elephant) {
+	void nextMinuteWithElephant(int currentScore, int timePassed, std::unordered_set<std::string> notOpenedValves, Actor me, Actor elephant) {
 		if (timePassed >= totalTime) {
 			addNewScore(currentScore);
 			return;
@@ -265,7 +266,6 @@ public:
 		std::vector<Actor> newElephants;
 		if (elephant.isReady()) {
 			auto& distancesFromElephant = distances[elephantValve.id];
-
 			for (const auto& targetId : notOpenedValves) {
 				auto distance = distancesFromElephant[targetId];
 				auto timeOfArrival = timePassed + distance;
@@ -281,7 +281,6 @@ public:
 		std::vector<Actor> newMes;
 		if (me.isReady()) {
 			auto& distancesFromMe = distances[myValve.id];
-
 			for (const auto& targetId : notOpenedValves) {
 				auto distance = distancesFromMe[targetId];
 				auto timeOfArrival = timePassed + distance;
