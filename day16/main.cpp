@@ -1,42 +1,47 @@
 #include "../common/pch.h"
-#include <iostream>
-#include <cstdint>
 #include <string>
 #include <algorithm>
 #include <numeric>
 #include <utility>
-#include <sstream>
 #include <vector>
 #include <map>
 #include <set>
 #include <unordered_set>
 
 struct Valve {
-	std::string id;
+	int id;
 	int flowRate{ 0 };
-	std::vector<std::string> neighborIds;
+	std::vector<int> neighborIds;
 };
 
-using DataType = std::unordered_map<std::string, Valve>;
+using DataType = std::unordered_map<int, Valve>;
+
+int strToId(const std::string& str) {
+	return str[0] * 100 + str[1];
+}
 
 DataType read() {
 	common::FileReader reader("input.txt");
 	DataType data;
 	for (std::string line; reader.nextLine(line);) {
 		std::string id = line.substr(line.find("Valve") + 6, 2);
-		auto& valve = data[id];
-		valve.id = id;
+		auto numericId = strToId(id);
+		auto& valve = data[numericId];
+		valve.id = numericId;
 		valve.flowRate = std::stoi(line.substr(line.find('=') + 1));
 
 		auto neighborsStr = line.substr(line.find("valve") + 6);
 		common::replaceAll(neighborsStr, ",", "");
-		valve.neighborIds = common::parseArray<std::string>(neighborsStr);
+		auto ids = common::parseArray<std::string>(neighborsStr);
+		std::transform(ids.begin(), ids.end(), std::back_inserter(valve.neighborIds), [](auto&& id) {
+			return strToId(id);
+		});
 	}
 	return data;
 }
 
 struct Node {
-	std::string id;
+	int id;
 	int distance;
 };
 
@@ -47,9 +52,9 @@ bool operator<(const Node& n1, const Node& n2) {
 	return n1.distance < n2.distance;
 }
 
-using DijkstraMap = std::map<std::string, std::pair<int, std::vector<std::string>>>;
+using DijkstraMap = std::map<int, std::pair<int, std::vector<int>>>;
 
-int getExistingValueOrMax(DijkstraMap& map, const std::string& key) {
+int getExistingValueOrMax(DijkstraMap& map, const int& key) {
 	auto found = map.find(key);
 	if (found == map.end()) {
 		auto max = 100000;
@@ -59,7 +64,7 @@ int getExistingValueOrMax(DijkstraMap& map, const std::string& key) {
 	return found->second.first;
 }
 
-std::vector<std::string> dijkstra(const DataType& data, const std::string& startId, const std::string& endId) {
+std::vector<int> dijkstra(const DataType& data, const int& startId, const int& endId) {
 	DijkstraMap distances;
 	std::set<Node> nodes;
 	nodes.insert(Node{ startId, 0 });
@@ -89,11 +94,11 @@ std::vector<std::string> dijkstra(const DataType& data, const std::string& start
 	return distances[endId].second;
 }
 
-using DistancesMap = std::unordered_map<std::string, std::unordered_map<std::string, const std::vector<std::string>>>;
+using DistancesMap = std::unordered_map<int, std::unordered_map<int, const std::vector<int>>>;
 
 class Actor {
 public:
-	Actor(const std::string& initialValveId) : currentValveId(initialValveId) {}
+	Actor(const int& initialValveId) : currentValveId(initialValveId) {}
 
 	void tick(int currentTime) {
 		bool shouldWait = blocked && currentTime < blockedUntil;
@@ -116,15 +121,15 @@ public:
 		return moving;
 	}
 
-	const std::string& getCurrentValveId() const {
+	const int& getCurrentValveId() const {
 		return currentValveId;
 	}
 
-	const std::string& getTargetValveId() const {
+	const int& getTargetValveId() const {
 		return targetValveId;
 	}
 
-	void movingTo(const std::string& valveId, int arrivalTime) {
+	void movingTo(const int& valveId, int arrivalTime) {
 		blocked = true;
 		moving = true;
 		blockedUntil = arrivalTime;
@@ -140,10 +145,10 @@ private:
 	bool blocked{ false };
 	int blockedUntil{ 0 };
 
-	std::string currentValveId;
+	int currentValveId;
 
 	bool moving{ false };
-	std::string targetValveId;
+	int targetValveId;
 };
 
 class Trawerse {
@@ -166,7 +171,7 @@ public:
 			}
 		}
 
-		const auto start = "AA";
+		const auto start = strToId("AA");
 		for (int i = 0; i < nonZeroValves.size(); ++i) {
 			const auto& tgt = nonZeroValves[i];
 			auto distance = dijkstra(data, start, tgt);
@@ -181,21 +186,21 @@ public:
 	void startPart1(int totalTime) {
 		this->totalTime = totalTime;
 		this->maxScore = 0;
-		std::set<std::string> openedValves;
-		trawerse(0, totalTime, "AA", openedValves);
+		std::set<int> openedValves;
+		trawerse(0, totalTime, strToId("AA"), openedValves);
 	}
 
 	void startPart2(int totalTime) {
 		this->totalTime = totalTime;
 		this->maxScore = 0;
-		const auto initialValveId = "AA";
+		const auto initialValveId = strToId("AA");
 		Actor me(initialValveId);
 		Actor elephant(initialValveId);
-		std::unordered_set<std::string> notOpenedValves(nonZeroValves.begin(), nonZeroValves.end());
+		std::unordered_set<int> notOpenedValves(nonZeroValves.begin(), nonZeroValves.end());
 		nextMinuteWithElephant(0, 0, notOpenedValves, me, elephant);
 	}
 
-	void trawerse(int currentScore, int minutesLeft, const std::string& valveId, std::set<std::string> openedValves) {
+	void trawerse(int currentScore, int minutesLeft, const int& valveId, std::set<int> openedValves) {
 		auto& valve = data[valveId];
 
 		if (valve.flowRate > 0) {
@@ -205,7 +210,7 @@ public:
 		}
 
 		auto& distancesFromCurrent = distances[valve.id];
-		std::vector<std::string> possibleTargets;
+		std::vector<int> possibleTargets;
 		for (const auto& targetId : nonZeroValves) {
 			if (!openedValves.contains(targetId)) {
 				possibleTargets.push_back(targetId);
@@ -235,7 +240,7 @@ public:
 		}
 	}
 
-	std::vector<Actor> createNewActors(const Actor& actor, int timePassed, const std::unordered_set<std::string>& notOpenedValves) {
+	std::vector<Actor> createNewActors(const Actor& actor, int timePassed, const std::unordered_set<int>& notOpenedValves) {
 		std::vector<Actor> newActors;
 		if (!actor.isReady()) {
 			return newActors;
@@ -250,7 +255,7 @@ public:
 			bool pathContainsUnopenedValves = std::any_of(std::next(path.begin()), std::prev(path.end()), [&notOpenedValves](auto&& id) {
 				return notOpenedValves.contains(id);
 			});
-			if (timeOfOpening <= totalTime && !pathContainsUnopenedValves) {
+			if (timeOfOpening <= totalTime) {
 				Actor newActor = actor;
 				newActor.movingTo(targetId, timeOfArrival);
 				newActors.push_back(newActor);
@@ -259,7 +264,7 @@ public:
 		return newActors;
 	}
 
-	void nextMinuteWithElephant(int currentScore, int timePassed, std::unordered_set<std::string> notOpenedValves, Actor me, Actor elephant) {
+	void nextMinuteWithElephant(int currentScore, int timePassed, std::unordered_set<int> notOpenedValves, Actor me, Actor elephant) {
 		if (timePassed >= totalTime) {
 			addNewScore(currentScore);
 			return;
@@ -324,7 +329,7 @@ private:
 	}
 
 	DataType& data;
-	std::vector<std::string> nonZeroValves;
+	std::vector<int> nonZeroValves;
 	DistancesMap distances;
 	int totalTime{ 0 };
 	int maxScore{ 0 };
