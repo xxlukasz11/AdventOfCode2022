@@ -5,26 +5,7 @@
 #include <vector>
 #include <unordered_set>
 
-struct Point {
-	int x;
-	int y;
-
-	bool operator==(const Point& point) const {
-		return x == point.x && y == point.y;
-	}
-
-	bool operator<(const Point& point) const {
-		return x == point.x ? y < point.y : x < point.x;
-	}
-};
-
-namespace std {
-template <> struct hash<Point> {
-	size_t operator()(const Point& point) const {
-		return std::hash<int>()(point.x) ^ std::hash<int>()(point.y);
-	}
-};
-}
+using Point = common::Point<int>;
 
 struct Measurement {
 	Point sensor;
@@ -162,20 +143,20 @@ uint64_t partTwo(const DataType& data) {
 		const Point bottom = { sensor.x, sensor.y + distance };
 		const Point left = { sensor.x - distance, sensor.y };
 		const Point right = { sensor.x + distance, sensor.y };
-		allLines.emplace_back(top, right);
-		allLines.emplace_back(top, left);
-		allLines.emplace_back(left, bottom);
-		allLines.emplace_back(right, bottom);
+		allLines.push_back({ top, right });
+		allLines.push_back({ top, left });
+		allLines.push_back({ left, bottom });
+		allLines.push_back({ right, bottom });
 	}
 
 	Point topLeft = { minRange - 1, minRange - 1 };
 	Point topRight = { maxRange + 1, minRange - 1 };
 	Point bottomLeft = { minRange - 1, maxRange + 1 };
 	Point bottomRight = { maxRange + 1, maxRange + 1 };
-	allLines.emplace_back(topLeft, topRight);
-	allLines.emplace_back(topRight, bottomRight);
-	allLines.emplace_back(bottomRight, bottomLeft);
-	allLines.emplace_back(bottomLeft, topLeft);
+	allLines.push_back({ topLeft, topRight });
+	allLines.push_back({ topRight, bottomRight });
+	allLines.push_back({ bottomRight, bottomLeft });
+	allLines.push_back({ bottomLeft, topLeft });
 
 	const auto allLinesCount = allLines.size();
 	std::unordered_set<Point> intersections;

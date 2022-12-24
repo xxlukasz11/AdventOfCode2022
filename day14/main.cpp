@@ -6,26 +6,11 @@
 #include <unordered_set>
 #include <array>
 
-struct Point {
-	int x;
-	int y;
-
-	bool operator==(const Point& point) const {
-		return x == point.x && y == point.y;
-	}
-};
+using Point = common::Point<int>;
 
 struct Line {
 	std::vector<Point> points;
 };
-
-namespace std {
-template <> struct hash<Point> {
-	size_t operator()(const Point& point) const {
-		return std::hash<int>()(point.x) ^ std::hash<int>()(point.y);
-	}
-};
-}
 
 using DataType = std::vector<Line>;
 
