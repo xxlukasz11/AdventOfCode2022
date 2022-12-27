@@ -4,6 +4,7 @@
 #include <numeric>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <array>
 
 using Cube = common::Vec3<int>;
@@ -28,26 +29,6 @@ std::array<Cube, 6> generateNeighbors(const Cube& cube) {
 			{cube.x, cube.y, cube.z + 1},
 			{cube.x, cube.y, cube.z - 1}
 		} };
-}
-
-int calculateAllExposedSurfaces(const std::set<Cube>& cubes) {
-	int exposedSurfaceCount = 0;
-	for (const auto& cube : cubes) {
-
-		std::array<Cube, 6> neighbors = generateNeighbors(cube);
-
-		for (const auto& neighbor : neighbors) {
-			if (!cubes.contains(neighbor)) {
-				++exposedSurfaceCount;
-			}
-		}
-	}
-	return exposedSurfaceCount;
-}
-
-int partOne(const DataType& data) {
-	std::set<Cube> cubes(data.begin(), data.end());
-	return calculateAllExposedSurfaces(cubes);
 }
 
 bool isCubeInside(const Cube& cube, const Cube& minCube, const Cube& maxCube) {
@@ -112,19 +93,34 @@ std::set<Cube> generateOuterCubes(const Cube& minCube, const Cube& maxCube) {
 }
 
 std::set<Cube> getAllOuterCubes(const std::set<Cube>& cubes, const Cube& minCube, const Cube& maxCube) {
-	auto outerCubes = generateOuterCubes(minCube, maxCube);
-	auto currentLayer = outerCubes;
+	std::set<Cube> outerCubes;
+	auto currentLayer = generateOuterCubes(minCube, maxCube);
 	while (!currentLayer.empty()) {
 		std::set<Cube> nextLayer;
 		for (const auto& cube : currentLayer) {
 			auto neighbors = generateValidNeighbors(cube, outerCubes, cubes, currentLayer, minCube, maxCube);
 			nextLayer.insert(neighbors.begin(), neighbors.end());
 		}
-		currentLayer = nextLayer;
-		outerCubes.insert(nextLayer.begin(), nextLayer.end());
+		outerCubes.merge(currentLayer);
+		currentLayer = std::move(nextLayer);
 	}
 	
 	return outerCubes;
+}
+
+int partOne(const DataType& data) {
+	std::unordered_set<Cube> cubes(data.begin(), data.end());
+	int exposedSurfaceCount = 0;
+	for (const auto& cube : cubes) {
+
+		std::array<Cube, 6> neighbors = generateNeighbors(cube);
+		for (const auto& neighbor : neighbors) {
+			if (!cubes.contains(neighbor)) {
+				++exposedSurfaceCount;
+			}
+		}
+	}
+	return exposedSurfaceCount;
 }
 
 int partTwo(const DataType& data) {
@@ -158,7 +154,7 @@ int partTwo(const DataType& data) {
 
 		const auto neighbors = generateNeighbors(cube);
 		for (const auto& neighbor : neighbors) {
-			if (!outerCubes.contains(neighbor) && isCubeInside(neighbor, minCube, maxCube)) {
+			if (cubes.contains(neighbor)) {
 				++exposedSurfaceCount;
 			}
 		}
