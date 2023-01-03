@@ -19,7 +19,7 @@ struct Command {
 };
 
 enum GridValue {
-	WALL,
+	TILE,
 	EMPTY
 };
 
@@ -268,7 +268,7 @@ private:
 		while (moves-- > 0 && advanceInCurrentDirOneStep());
 	}
 
-	Point getCoord(const EndPoint& endPoint, int offset, const Dir& srcDir) {
+	int claculateOffsetOnANewTile(const EndPoint& endPoint, int offset, const Dir& srcDir) {
 		const auto& [tgtPos, tgtDir] = endPoint;
 
 		bool swapOffset = false;
@@ -288,8 +288,12 @@ private:
 			swapOffset = true;
 		}
 
-		auto transformedOffset = (swapOffset ? edgeLength - offset - 1 : offset);
+		return (swapOffset ? edgeLength - offset - 1 : offset);
+	}
 
+	Point calculatePosOnANewTile(const EndPoint& endPoint, int offset, const Dir& srcDir) {
+		auto transformedOffset = claculateOffsetOnANewTile(endPoint, offset, srcDir);
+		const auto& [tgtPos, tgtDir] = endPoint;
 		if (tgtDir == Dir::TOP) {
 			return { tgtPos.x * edgeLength + transformedOffset,  tgtPos.y * edgeLength };
 		}
@@ -304,42 +308,35 @@ private:
 	}
 
 	bool advanceInCurrentDirOneStep() {
-		Point tilePos{currentPos.x / edgeLength, currentPos.y / edgeLength };
-
-		Point newPos = currentPos;
-		newPos.x += currentDir.x;
-		newPos.y += currentDir.y;
-
+		Point currentTilePos{ currentPos.x / edgeLength, currentPos.y / edgeLength };
+		EndPoint currentEndPoint{ currentTilePos, currentDir };
+		auto target = findTarget(currentEndPoint);
 		Dir newDir = currentDir;
-
-		EndPoint src{ tilePos, currentDir };
-		auto target = findTarget(src);
+		Point newPos{ currentPos.x + currentDir.x, currentPos.y + currentDir.y };
 
 		if (currentDir.y != 0) {
 			auto columnRange = columnRanges[newPos.x];
 			if (newPos.y > columnRange.second || newPos.y < columnRange.first) {
 				newDir = target->dir.opposite();
-				auto xOffset = newPos.x - tilePos.x * edgeLength;
-				newPos = getCoord(target.value(), xOffset, src.dir);
+				auto xOffset = newPos.x - currentTilePos.x * edgeLength;
+				newPos = calculatePosOnANewTile(target.value(), xOffset, currentEndPoint.dir);
 			}
 		}
-
-		
 
 		if (currentDir.x != 0) {
 			const auto& row = map[newPos.y];
 			const auto& rowOffset = rowOffsets[newPos.y];
 			if (newPos.x < rowOffset || newPos.x >= row.size()) {
 				newDir = target->dir.opposite();
-				auto yOffset = newPos.y - tilePos.y * edgeLength;
-				newPos = getCoord(target.value(), yOffset, src.dir);
+				auto yOffset = newPos.y - currentTilePos.y * edgeLength;
+				newPos = calculatePosOnANewTile(target.value(), yOffset, currentEndPoint.dir);
 			}
 		}
-
 		
 		if (map[newPos.y][newPos.x] == '#') {
 			return false;
 		}
+
 		currentPos = newPos;
 		currentDir = newDir;
 		return true;
@@ -349,11 +346,9 @@ private:
 		auto found = std::find_if(connections.begin(), connections.end(), [src](auto&& connection) {
 			return connection.src.pos == src.pos && connection.src.dir == src.dir;
 		});
-
 		if (found != connections.end()) {
 			return found->tgt;
 		}
-
 		return std::nullopt;
 	}
 
@@ -408,7 +403,7 @@ GridType placeTilesOnGrid(const MapType& map, int edgeLength) {
 			if (realX >= row.size() || row[realX] == ' ') {
 				continue;
 			}
-			grid[y][x] = GridValue::WALL;
+			grid[y][x] = GridValue::TILE;
 		}
 	}
 	return grid;
@@ -419,7 +414,7 @@ std::vector<Connection> connectAdjacentLShaped(const GridType& grid, const Dir& 
 	for (int y = 0; y < GRID_SIZE; ++y) {
 		for (int x = 0; x < GRID_SIZE; ++x) {
 			auto topLeft = grid[y][x];
-			if (topLeft != GridValue::WALL) {
+			if (topLeft != GridValue::TILE) {
 				continue;
 			}
 
@@ -428,11 +423,11 @@ std::vector<Connection> connectAdjacentLShaped(const GridType& grid, const Dir& 
 				continue;
 			}
 			auto targetValue = grid[targetPos.y][targetPos.x];
-			if (targetValue != GridValue::WALL) {
+			if (targetValue != GridValue::TILE) {
 				continue;
 			}
 
-			bool isLshaped = grid[targetPos.y][x] == GridValue::WALL;
+			bool isLshaped = grid[targetPos.y][x] == GridValue::TILE;
 			if (isLshaped) {
 				EndPoint src{ {x, y}, Dir{ neighborDir.x, 0} };
 				EndPoint tgt{ targetPos, Dir::TOP };
@@ -452,17 +447,33 @@ std::vector<Connection> connectAdjacentToLShaped(const GridType& grid, const Con
 	std::vector<Connection> connections;
 	auto srcAdjacent = common::tryGet(grid, src.pos.y, src.pos.x, tgt.dir);
 	auto tgtAdjacent = common::tryGet(grid, tgt.pos.y, tgt.pos.x, src.dir);
-	if (srcAdjacent.has_value() && srcAdjacent.value() == GridValue::WALL) {
+	if (srcAdjacent.has_value() && srcAdjacent.value() == GridValue::TILE) {
 		if (!tgtAdjacent.has_value() || tgtAdjacent.value() == GridValue::EMPTY) {
 			EndPoint source{ {src.pos.x + tgt.dir.x, src.pos.y + tgt.dir.y}, src.dir };
 			EndPoint target{ {tgt.pos.x, tgt.pos.y}, src.dir };
 			connections.push_back({ source, target });
 		}
 	}
-	if (tgtAdjacent.has_value() && tgtAdjacent.value() == GridValue::WALL) {
+	if (tgtAdjacent.has_value() && tgtAdjacent.value() == GridValue::TILE) {
 		if (!srcAdjacent.has_value() || srcAdjacent.value() == GridValue::EMPTY) {
 			EndPoint source{ {src.pos.x, src.pos.y}, tgt.dir };
 			EndPoint target{ {tgt.pos.x + src.dir.x, tgt.pos.y + src.dir.y}, tgt.dir };
+			connections.push_back({ source, target });
+		}
+	}
+	auto tgtAdjacentOpposite = common::tryGet(grid, tgt.pos.y, tgt.pos.x, tgt.dir.opposite());
+	if (tgtAdjacentOpposite.has_value() && tgtAdjacentOpposite.value() == GridValue::TILE) {
+		if (srcAdjacent.has_value() && srcAdjacent.value() == GridValue::TILE) {
+			EndPoint source{ {src.pos.x + tgt.dir.x, src.pos.y + tgt.dir.y}, tgt.dir };
+			EndPoint target{ {tgt.pos.x - tgt.dir.x, tgt.pos.y - tgt.dir.y}, src.dir };
+			connections.push_back({ source, target });
+		}
+	}
+	auto srcAdjacentOpposite = common::tryGet(grid, src.pos.y, src.pos.x, src.dir.opposite());
+	if (srcAdjacentOpposite.has_value() && srcAdjacentOpposite.value() == GridValue::TILE) {
+		if (tgtAdjacent.has_value() && tgtAdjacent.value() == GridValue::TILE) {
+			EndPoint source{ {src.pos.x + src.dir.x, src.pos.y + src.dir.y}, tgt.dir };
+			EndPoint target{ {tgt.pos.x - src.dir.x, tgt.pos.y - src.dir.y}, src.dir };
 			connections.push_back({ source, target });
 		}
 	}
@@ -474,7 +485,7 @@ std::vector<Connection> connectVertical(const GridType& grid) {
 	for (int x = 0; x < GRID_SIZE; ++x) {
 		auto top = grid[0][x];
 		auto bottomY = GRID_SIZE - 1;
-		if (top == GridValue::WALL && top == grid[bottomY][x]) {
+		if (top == GridValue::TILE && top == grid[bottomY][x]) {
 			EndPoint source{ {x, 0}, Dir::TOP };
 			EndPoint target{ {x, bottomY}, Dir::BOTTOM };
 			connections.push_back({ source, target });
@@ -488,7 +499,7 @@ std::vector<Connection> connectHorizontal(const GridType& grid) {
 	for (int y = 0; y < GRID_SIZE; ++y) {
 		auto left = grid[y].front();
 		auto rightX = GRID_SIZE - 1;
-		if (left == GridValue::WALL && left == grid[y].back()) {
+		if (left == GridValue::TILE && left == grid[y].back()) {
 			EndPoint source{ {0, y}, Dir::LEFT };
 			EndPoint target{ {rightX, y}, Dir::RIGHT };
 			connections.push_back({ source, target });
@@ -501,21 +512,19 @@ std::vector<EndPoint> generateAllPossibleendPoints(const GridType& grid) {
 	std::vector<EndPoint> allPossibleEndPoints;
 	for (int y = 0; y < GRID_SIZE; ++y) {
 		for (int x = 0; x < GRID_SIZE; ++x) {
-			if (grid[y][x] != GridValue::WALL) {
+			if (grid[y][x] != GridValue::TILE) {
 				continue;
 			}
-
-			auto checkSide = [&allPossibleEndPoints, &grid](const Dir& dir, int x, int y) {
+			auto possiblyAddEndPoint = [&allPossibleEndPoints, &grid](const Dir& dir, int x, int y) {
 				auto neighbor = common::tryGet(grid, y, x, dir);
 				if (!neighbor.has_value() || neighbor.value() == GridValue::EMPTY) {
 					allPossibleEndPoints.push_back({ {x, y}, dir });
 				}
 			};
-
-			checkSide(Dir::TOP, x, y);
-			checkSide(Dir::LEFT, x, y);
-			checkSide(Dir::RIGHT, x, y);
-			checkSide(Dir::BOTTOM, x, y);
+			possiblyAddEndPoint(Dir::TOP, x, y);
+			possiblyAddEndPoint(Dir::LEFT, x, y);
+			possiblyAddEndPoint(Dir::RIGHT, x, y);
+			possiblyAddEndPoint(Dir::BOTTOM, x, y);
 		}
 	}
 	return allPossibleEndPoints;
@@ -556,61 +565,14 @@ std::vector<Connection> connectCubeWalls(const MapType& map) {
 	auto edgeLength = calculateEdgeLength(map);
 	auto grid = placeTilesOnGrid(map, edgeLength);
 
-	// look for adjacent walls (L shaped)
 	auto connections = connectAdjacentLShaped(grid, Dir::BOTOM_LEFT);
 	auto toMerge = connectAdjacentLShaped(grid, Dir::BOTTOM_RIGHT);
 	connections.insert(connections.end(), toMerge.begin(), toMerge.end());
 
-	// connect adjacent to previous pairs
 	auto lShapedConnections = connections;
 	for (const auto& connection : lShapedConnections) {
-		auto x = connectAdjacentToLShaped(grid, connection);
-		connections.insert(connections.end(), x.begin(), x.end());
-	}
-
-	// connect adjacent to previous
-	for (const auto& [src, tgt] : lShapedConnections) {
-		if (src.dir == Dir::RIGHT) {
-			auto topPlace = common::tryGet(grid, src.pos.y, src.pos.x, Dir::TOP);
-			auto bottomTgt = common::tryGet(grid, tgt.pos.y, tgt.pos.x, Dir::BOTTOM);
-			if (bottomTgt.has_value() && bottomTgt.value() == GridValue::WALL) {
-				if (topPlace.has_value() && topPlace.value() == GridValue::WALL) {
-					EndPoint source{ {src.pos.x, src.pos.y - 1}, Dir::TOP };
-					EndPoint target{ {tgt.pos.x, tgt.pos.y + 1}, Dir::RIGHT };
-					connections.push_back({ source, target });
-				}
-			}
-		} else if (src.dir == Dir::LEFT) {
-			auto topPlace = common::tryGet(grid, src.pos.y, src.pos.x, Dir::TOP);
-			auto bottomTgt = common::tryGet(grid, tgt.pos.y, tgt.pos.x, Dir::BOTTOM);
-			if (bottomTgt.has_value() && bottomTgt.value() == GridValue::WALL) {
-				if (topPlace.has_value() && topPlace.value() == GridValue::WALL) {
-					EndPoint source{ {src.pos.x, src.pos.y - 1}, Dir::TOP };
-					EndPoint target{ {tgt.pos.x, tgt.pos.y + 1}, Dir::LEFT };
-					connections.push_back({ source, target });
-				}
-			}
-		} else if (tgt.dir == Dir::LEFT) {
-			auto leftPlace = common::tryGet(grid, src.pos.y, src.pos.x, Dir::LEFT);
-			auto rightTgt = common::tryGet(grid, tgt.pos.y, tgt.pos.x, Dir::RIGHT);
-			if (rightTgt.has_value() && rightTgt.value() == GridValue::WALL) {
-				if (leftPlace.has_value() && leftPlace.value() == GridValue::WALL) {
-					EndPoint source{ {src.pos.x - 1, src.pos.y}, Dir::LEFT };
-					EndPoint target{ {tgt.pos.x + 1, tgt.pos.y}, Dir::BOTTOM };
-					connections.push_back({ source, target });
-				}
-			}
-		} else {
-			auto rightPlace = common::tryGet(grid, src.pos.y, src.pos.x, Dir::RIGHT);
-			auto leftTgt = common::tryGet(grid, tgt.pos.y, tgt.pos.x, Dir::LEFT);
-			if (leftTgt.has_value() && leftTgt.value() == GridValue::WALL) {
-				if (rightPlace.has_value() && rightPlace.value() == GridValue::WALL) {
-					EndPoint source{ {src.pos.x + 1, src.pos.y}, Dir::RIGHT };
-					EndPoint target{ {tgt.pos.x - 1, tgt.pos.y}, Dir::BOTTOM };
-					connections.push_back({ source, target });
-				}
-			}
-		}
+		auto newConnections = connectAdjacentToLShaped(grid, connection);
+		connections.insert(connections.end(), newConnections.begin(), newConnections.end());
 	}
 
 	auto vertical = connectVertical(grid);
@@ -622,7 +584,6 @@ std::vector<Connection> connectCubeWalls(const MapType& map) {
 	auto missingConnections = findMissingConnections(grid, connections);
 	connections.insert(connections.end(), missingConnections.begin(), missingConnections.end());
 
-	// mirror connections
 	auto toIterate = connections;
 	for (const auto& [src, tgt] : toIterate) {
 		connections.push_back({ tgt, src });
