@@ -40,10 +40,6 @@ using CommandList = std::vector<Command>;
 using GridType = std::vector<std::vector<GridValue>>;
 using DataType = std::pair<MapType, CommandList>;
 
-bool operator==(const Dir& left, const Dir& right) {
-	return left.x == right.x && left.y == right.y;
-}
-
 Dir parseDir(char character) {
 	if (character == 'R') {
 		return Dir::RIGHT;
